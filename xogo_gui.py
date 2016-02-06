@@ -40,10 +40,15 @@ print(u"conectando socket 'actualizacións'...")
 try:
 	actualizacions.connect((HOST, PORT))
 	actualizacions.sendall(json.dumps(xogador))
-	actualizacions.setblocking(0)
 except:
 	print(u"Non foi posible conectar o socket 'actualizacións'")
 	sys.exit()
+	
+data = actualizacions.recv(1024)
+print repr(data)
+lista_casillas,turno = json.loads(data)
+
+actualizacions.setblocking(0)
 
 #CONSTANTES 
 ANCHO_CADRO = 85
@@ -68,7 +73,7 @@ lista_casillas = [[0,0,0],[0,0,0],[0,0,0]]
 
 ganador = False
 casilla_rato = False
-turno = 1
+
 
 pygame.init()
 ventana = pygame.display.set_mode([ANCHO_VENTANA, ALTO_VENTANA])
