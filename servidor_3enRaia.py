@@ -11,6 +11,7 @@ import traceback
 #VARIABLES DO XOGO
 
 lista_xogo = [[0,0,0],[0,0,0],[0,0,0]]
+lista_colores = [[0,0,0],[0,0,0],[0,0,0]]
 turno = 1
 ganador = False
 
@@ -23,42 +24,45 @@ serversocket = socket.socket(socket.AF_INET, socket.SOCK_STREAM)
 serversocket.bind((HOST, PORT))
 
 ERROR = False
+xogadores = {}
 
 print(HOST,PORT)
 
 def enraia(list,xogador):
-	for linha in list:
-		if "".join(map(str, linha)) == str(xogador)*3:
-			return True
+	for linha in range(len(list)):
+		if "".join(map(str, list[linha])) == str(xogador)*3:
+			lista_colores[linha] = [1,1,1]
+			return xogador
 	for columna in range(len(list)):
 		if "".join(map(str, [list[0][columna],list[1][columna],list[2][columna]])) == str(xogador)*3:
-			return True
-	if ("".join(map(str, [list[0][0],list[1][1],list[2][2]])) == str(xogador)*3
-		or "".join(map(str, [list[0][2],list[1][1],list[2][0]])) == str(xogador)*3):
-		return True
+			lista_colores[0][columna],lista_colores[1][columna],lista_colores[2][columna] = 1,1,1
+			return xogador
+	if "".join(map(str, [list[0][0],list[1][1],list[2][2]])) == str(xogador)*3:
+		lista_colores[0][0],lista_colores[1][1],lista_colores[2][2] = 1,1,1
+		return xogador
+	if "".join(map(str, [list[0][2],list[1][1],list[2][0]])) == str(xogador)*3:
+		lista_colores[0][2],lista_colores[1][1],lista_colores[2][0] = 1,1,1
+		return xogador
 	return False
 
 class procesando(Thread):
-
 	def __init__(self, socket, xog):
 		Thread.__init__(self)
 		self.sock = socket
 		self.xog = xog
 		self.start()
-
 	def run(self):
 		try:
 			self.run_()
 		except:
 			traceback.print_exc()
-
 	def run_(self):
 		global lista_xogo
 		global turno
 		global ERROR
+		global xogadores
 		ON = True
 		while ON:
-			print "volta de bucle"
 			data = self.sock.recv(1024)
 			if data:
 				if data == "end":
@@ -70,41 +74,58 @@ class procesando(Thread):
 					pos_cadro = json.loads(data)
 					lista_xogo[pos_cadro[1]][pos_cadro[0]] = self.xog
 					turno = 2 if self.xog == 1 else 1
-					msg = json.dumps([lista_xogo,turno])
+					ganhador = enraia(lista_xogo,self.xog)
+					msg = json.dumps([lista_xogo,turno,ganhador,lista_colores])
 					for x in xogadores.itervalues():
 						x['actualizacions'].sendall(msg)
 			else:
-				sys.exit()
-		print "...Servidor Desactivado"
-
-
-xogadores = {}
+				self.sock.close()
+				try:
+					del xogadores[self.xog]
+				except:
+					print "Error ao eliminar un xogador!"
+					xogadores = {}
+				ON = False
+		print u"> xogador: "+str(self.xog)+" "+str(self.sock)+" Eliminado!"
 
 def run_server():
 	global ERROR
 	global turno
 	serversocket.listen(1)
 	while True:
-		print("Servidor escoitando...")
-			try:
-				sock, addr = serversocket.accept()
-			except KeyboardInterrupt:
-				serversocket.close()
-				sys.exit()
-			xog = json.loads(sock.recv(1024))
-			print "Conectado!"
-			if xog == "npi":
-				print "xogador novo!", xogadores
-					xog = len(xogadores) + 1
-					if xog == 3:
-						sock.close()
-						continue
-					xogadores[xog] = {'xogadas': sock, 'actualizacions': None, 'id': xog}
-					sock.send(json.dumps(xog))
-			else:
-				print 'Connected by', addr
-				xogadores[xog]['actualizacions'] = sock
-				procesando(xogadores[xog]['xogadas'], xog)
+		if len(xogadores) >= 2:
+			print("Xa hai 2 xogadores conectados ao servidor")
+		else:
+			print("Servidor escoitando...")
+		try:
+			sock, addr = serversocket.accept()
+		except KeyboardInterrupt:
+			serversocket.close()
+			sys.exit()
+		d_xog = json.loads(sock.recv(1024))
+		if d_xog == 0:
+			print "xogador novo!"
+			n_xog = len(xogadores) + 1
+			if n_xog == 3:
+				sock.close()
+				continue
+			xogadores[n_xog] = {'xogadas': sock, 'actualizacions': None, 'id': n_xog}
+			sock.send(json.dumps(n_xog))
+		elif not d_xog == 0:
+			print 'Connected by', addr
+			xogadores[d_xog]['actualizacions'] = sock
+			procesando(xogadores[d_xog]['xogadas'], d_xog)
+			sock.send(json.dumps([lista_xogo,turno]))
+			print "xogadores:"
+			for x in xogadores.values():
+				print "\t"+str(x["id"])+": "+str(x)
+			if len(xogadores) == 2:
+				for x in xogadores.values():
+					print "Enviando inicio a "+str(x)
+					x["actualizacions"].send(json.dumps("inicio"))
+				print u"Empezando a partida!"
+		else:
+			print "Envio ao servidor erroneo"
 	sys.exit()
 
 run_server()

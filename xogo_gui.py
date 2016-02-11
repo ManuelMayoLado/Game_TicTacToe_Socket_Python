@@ -24,13 +24,15 @@ try:
 except:
 	print(u"Imposible conectar!")
 	sys.exit()
+	
+print(u"...Conectado!")
 
 #RECIVINDO A ID CORRESPONDENTE DO SERVIDOR
 print(u"recibindo ID de xogador...")
 try:
 	s = xogadas.recv(1024)
-	print repr(s)
 	xogador = json.loads(s)
+	print "ID: "+str(xogador)
 except:
 	print(u"Error na conexión!")
 	sys.exit()
@@ -43,10 +45,20 @@ try:
 except:
 	print(u"Non foi posible conectar o socket 'actualizacións'")
 	sys.exit()
+print(u"...Conectado!")
 	
 data = actualizacions.recv(1024)
-print repr(data)
 lista_casillas,turno = json.loads(data)
+
+print "casilla: "+str(lista_casillas), "turno: "+str(turno)
+
+print u"Esperando a que os 2 xogadores estean conectados..."
+data = actualizacions.recv(1024)
+if json.loads(data) == "inicio":
+	print u"Empeza o xogo!"
+else:
+	print u"Aconteceu un error!"
+	sys.exit()
 
 actualizacions.setblocking(0)
 
@@ -71,13 +83,14 @@ ALTO_VENTANA = ALTO_CADRO*3 + MARCO*2
 
 lista_casillas = [[0,0,0],[0,0,0],[0,0,0]]
 
-ganador = False
+ganhador = False
 casilla_rato = False
 
 
 pygame.init()
 ventana = pygame.display.set_mode([ANCHO_VENTANA, ALTO_VENTANA])
 font = pygame.font.SysFont("System", ANCHO_VENTANA/5)
+font_turno = pygame.font.SysFont("System", ANCHO_VENTANA/15)
 
 on = True
 
@@ -89,8 +102,8 @@ while on:
 	
 	try:
 		data = actualizacions.recv(1024)
-		print repr(data)
-		lista_casillas,turno = json.loads(data)
+		print u"Recivido actualización: "+repr(data)
+		lista_casillas,turno,ganhador,lista_colores = json.loads(data)
 	except socket.error:
 		pass
 	
@@ -98,8 +111,19 @@ while on:
 	
 	ventana.fill(COLOR_FONDO)
 	
+	if xogador == turno and not ganhador:
+		tocache = font_turno.render("tocache", 1, [0,0,0])
+		ventana.blit(tocache, [0,0])
+	elif ganhador and ganhador == xogador:
+		ganhaches = font_turno.render("ganhaches!", 1, [50,200,50])
+		ventana.blit(ganhaches, [0,0])
+	elif ganhador and not ganhador == xogador:
+		perdeches = font_turno.render("perdeches!", 1, [200,50,50])
+		ventana.blit(perdeches, [0,0])
+	
 	rect_xogo = pygame.Rect(MARCO, MARCO, ANCHO_VENTANA-(MARCO*2), ALTO_VENTANA-(MARCO*2))
 	pygame.draw.rect(ventana, [250,250,250], rect_xogo)
+	
 	
 	for linha in range(len(lista_casillas)):
 		for casilla in range(len(lista_casillas[linha])):
@@ -109,10 +133,10 @@ while on:
 										ANCHO_CADRO, ALTO_CADRO)
 				pygame.draw.rect(ventana, [240,240,240], rect_sel)
 			#DEBUXAR GAÑADORES
-			if ganador and lista_casillas[linha][casilla] == ganador:
-				rect_ganador = pygame.Rect(MARCO+ANCHO_CADRO*casilla, MARCO+ALTO_CADRO*linha, 
+			if ganhador and lista_colores[linha][casilla] == ganhador:
+				rect_ganhador = pygame.Rect(MARCO+ANCHO_CADRO*casilla, MARCO+ALTO_CADRO*linha, 
 											ANCHO_CADRO, ALTO_CADRO)
-				pygame.draw.rect(ventana, COLOR_VICTORIA, rect_ganador)
+				pygame.draw.rect(ventana, COLOR_VICTORIA, rect_ganhador)
 			#DEBUXAR SÍMBOLOS
 			if lista_casillas[linha][casilla]:
 				if lista_casillas[linha][casilla] == 1:
@@ -143,13 +167,14 @@ while on:
 	
 	#ACCIÓN E ENVIO DE DATOS
 	
-	if (not ganador) and casilla_rato and pygame.mouse.get_pressed()[0]:
+	if (not ganhador) and casilla_rato and pygame.mouse.get_pressed()[0]:
 		if not lista_casillas[casilla_rato[1]][casilla_rato[0]]:
-			print repr(xogador), repr(turno)
 			if xogador == turno:
-				ENVIO = [casilla_rato[0],casilla_rato[1]]
-				xogadas.sendall(json.dumps(ENVIO))
-				print("send:",ENVIO)
+				print "xogador: "+str(xogador), "turno: "+str(turno)
+				if xogador == turno:
+					ENVIO = [casilla_rato[0],casilla_rato[1]]
+					xogadas.sendall(json.dumps(ENVIO))
+					print("send:",ENVIO)
 	
 	#EVENTOS
 	
